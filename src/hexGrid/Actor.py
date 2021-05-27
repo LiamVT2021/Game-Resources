@@ -25,6 +25,9 @@ class Entity:
     def toKey(self):
         return (self.color, self.label)
     
+    def isActor(self):
+        return False
+    
 
 class Template:
 
@@ -43,8 +46,12 @@ class GridActor(Entity):
     def __init__(self, color, label, temp):
         super().__init__(color, label)
         self.temp = temp
-        self.curHp = temp.maxHp
+        if temp != None:
+            self.curHp = temp.maxHp
         
+    def isActor(self):
+        return self.temp != None
+    
     def damage(self, dmg):
         self.curHp -= dmg
         

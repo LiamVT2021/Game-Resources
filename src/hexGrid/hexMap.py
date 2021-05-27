@@ -3,12 +3,17 @@ Created on May 3, 2021
 
 @author: Liam
 '''
-from tkinter import Tk, Canvas, Toplevel
+from tkinter import Tk, Canvas
 from tkinter.font import Font
 from math import sqrt
-from hexGrid.axialGrid import HexGrid, cube_round, axial_to_cube, getParrCorners, getCircCorners, getTriCorners
+from hexGrid.axialGrid import HexGrid, cube_round, axial_to_cube, parrCorners, \
+                            circCorners, triCorners, rhomCorners
 from hexGrid.CommandStrip import HexStrip
-from hexGrid.Actor import Entity, GridActor, ActorWindow, ActorManager
+from hexGrid.Actor import Entity, ActorManager
+
+
+def lineCorners(a, b):
+    return [a, b]
 
 
 def makeHex(canvas, x, y, a, color='white'):
@@ -131,7 +136,7 @@ class HexMap(HexGrid):
         get = self.entities.get(e)
         if get != None:
             (shape, entity) = get
-            if isinstance(entity, GridActor):
+            if entity.isActor():
                 self.actors.remove(entity)
             (circ, text) = shape
             self.map.delete(circ, text)
@@ -172,8 +177,8 @@ class HexMap(HexGrid):
         (inner, _outer) = self.getTile(x, y)
         self.map.itemconfig(inner, fill=tile)
     
-    def getColor(self, x, y, quick = False):
-        if (not quick and self.inBounds(x, y)) or self.quickBounds(x, y):
+    def getColor(self, x, y, quick=False):
+        if self.inBounds(x, y, quick=quick):
             (inner, _outer) = self.getTile(x, y)
             return self.map.itemcget(inner, 'fill')
         return None
@@ -202,48 +207,51 @@ class HexMap(HexGrid):
         strip = self.strip
         comm = strip.getCommand()
         clr = strip.getColor()
-        # cords = self.strip.getCords()
+        write = str(E)
         if comm == 'Brush':
             (x, y) = E
             self.setTile(x, y, clr)
         elif comm == 'Line':
-            A = strip.getCords()
-            if not self.hexBounds(A):
-                strip.setDisplay(str(E))
-            else:#elif self.hexBounds(E):
-                self.drawLine(A, E, clr)
-                strip.setDisplay('(0, 0)')
+            if self.drawLine(strip.getCords(), E, clr):
+                write = '(0, 0)'
         elif comm == 'Parallelogram':
-            A = strip.getCords()
-            if not self.hexBounds(A):
-                strip.setDisplay(str(E))
-            else:#elif self.hexBounds(E):
-                if strip.getCheck():
-                    self.drawParrallagram(A, E, clr)
-                else:
-                    self.drawBox(A, E, clr)
-                strip.setDisplay('(0, 0)')
+            # A = strip.getCords()
+            if self.drawParrallagram(strip.getCords(), E, clr, strip.getCheck()):
+                write = '(0, 0)'
+            # if not self.hexBounds(A):
+            #     strip.setDisplay(str(E))
+            # else:#elif self.hexBounds(E):
+            #     if strip.getCheck():
+            #         self.drawParrallagram(A, E, clr)
+            #     else:
+            #         self.drawBox(A, E, clr)
+            #     strip.setDisplay('(0, 0)')
         elif comm == 'Circle':
             # if self.hexBounds(E):
-            if strip.getCheck():
-                self.drawCircle(E, strip.getInt(), clr)
-            else:
-                self.drawRing(E, strip.getInt(), clr)
+            # if strip.getCheck():
+            self.drawCircle(E, strip.getInt(), clr, strip.getCheck())
+            # else:
+            #     self.drawRing(E, strip.getInt(), clr)
         elif comm == 'Triangle':
-            A = strip.getCords()
-            if not self.hexBounds(A):
-                strip.setDisplay(str(E))
-            else:#elif self.hexBounds(E):
+            if self.drawTriangle(strip.getCords(), E, clr, strip.getCheck()):
+                write = '(0, 0)'
+            # A = strip.getCords()
+            # if not self.hexBounds(A):
+            #     strip.setDisplay(str(E))
+            # else:#elif self.hexBounds(E):
                 # if strip.getCheck():
                 #     self.drawParrallagram(A, E, clr)
                 # else:
                 #     self.drawBox(A, E, clr)
-                strip.setDisplay('(0, 0)')
+                # strip.setDisplay('(0, 0)')
+        elif comm == 'Rhombus':
+            if self.drawRhombus(strip.getCords(), E, clr, strip.getCheck()):
+                write = '(0, 0)'
         elif comm == 'Fill':
             # if self.hexBounds(E):
             self.fill(E, clr)
         elif comm == 'SwapColor':
-            (x,y) = E
+            (x, y) = E
             old = self.getColor(x, y)
             if old != None:
                 self.swapColor(old, clr)
@@ -256,16 +264,19 @@ class HexMap(HexGrid):
         elif comm == 'Move':
             A = strip.getCords()
             if not self.hexBounds(A):
-                if self.entities.get(E) != None:
-                    strip.setDisplay(str(E))
-            else:#elif self.hexBounds(E):
                 if self.entities.get(E) == None:
+                    return  # strip.setDisplay(str(E))
+            else:  # elif self.hexBounds(E):
+                if A == E:
+                    pass
+                elif self.entities.get(E) == None:
                     self.move(A, E)
                 else:
                     self.swap(A, E)
-                strip.setDisplay('(0, 0)')
+                write = '(0, 0)'
         elif comm == 'Remove':
             self.remove(E)
+        strip.setDisplay(write)
 
     def pathCoords(self, hexList):
         coords = []
@@ -281,44 +292,72 @@ class HexMap(HexGrid):
         strip = self.strip
         comm = strip.getCommand()
         if comm == 'Line':
-            A = strip.getCords()
-            if self.hexBounds(A):# and self.hexBounds(E):
-                coords = self.pathCoords([A, E])
-                self.map.delete('hover')
-                self.map.create_line(coords, width=2, tags='hover')
-            else:
-                self.map.delete('hover')
+            self.makeHover(strip.getCords(), E, lineCorners)
+            # A = strip.getCords()
+            # if self.hexBounds(A):  # and self.hexBounds(E):
+            #     coords = self.pathCoords([A, E])
+            #     self.map.delete('hover')
+            #     self.map.create_line(coords, width=2, tags='hover')
+            # else:
+            #     self.map.delete('hover')
         if comm == 'Parallelogram':
-            A = strip.getCords()
-            if self.hexBounds(A):# and self.hexBounds(E):
-                corners = getParrCorners(A, E)
-                coords = self.pathCoords(corners)
+            self.makeHover(strip.getCords(), E, parrCorners)
+            # A = strip.getCords()
+            # if self.hexBounds(A):  # and self.hexBounds(E):
+            #     corners = parrCorners(A, E)
+            #     coords = self.pathCoords(corners)
+            #     self.map.delete('hover')
+            #     if len(corners) == 2:
+            #         self.map.create_line(coords, width=2, tags='hover')
+            #     else:
+            #         self.map.create_polygon(coords, fill='', outline='black', width=2, tags='hover')
+            # else:
+            #     self.map.delete('hover')
+        if comm == 'Circle':
+            self.makeHover(E, strip.getInt(), circCorners)
+            # if self.hexBounds(E):
+            # radius = strip.getInt()
+            # corners = circCorners(E, radius)
+            # coords = self.pathCoords(corners)
+            # self.map.delete('hover')
+            # if radius > 0:
+            #     self.map.create_polygon(coords, fill='', outline='black', width=2, tags='hover')
+            # else:
+            #     self.map.delete('hover')
+        if comm == 'Triangle':
+            self.makeHover(strip.getCords(), E, triCorners)
+            # A = strip.getCords()
+            # if self.hexBounds(A):  # and self.hexBounds(E):
+            #     corners = triCorners(A, E)
+            #     coords = self.pathCoords(corners)
+            #     self.map.delete('hover')
+            #     self.map.create_polygon(coords, fill='', outline='black', width=2, tags='hover')
+            # else:
+            #     self.map.delete('hover')
+        if comm == 'Rhombus':
+            self.makeHover(strip.getCords(), E, rhomCorners)
+            # A = strip.getCords()
+            # if self.hexBounds(A):  # and self.hexBounds(E):
+            #     corners = rhomCorners(A, E)
+            #     coords = self.pathCoords(corners)
+            #     self.map.delete('hover')
+            #     self.map.create_polygon(coords, fill='', outline='black', width=2, tags='hover')
+            # else:
+            #     self.map.delete('hover')
+                
+    def makeHover(self, a, b, cornMethod):
+            if self.hexBounds(a):  # and self.hexBounds(E):
+                corners = cornMethod(a, b)
+                coords = self.pathCoords(corners)                    
                 self.map.delete('hover')
                 if len(corners) == 2:
                     self.map.create_line(coords, width=2, tags='hover')
                 else:
-                    self.map.create_polygon(coords, fill='', outline='black', width=2, tags='hover')
+                    self.map.create_polygon(coords, fill='', outline='black',
+                                             width=2, tags='hover')
             else:
                 self.map.delete('hover')
-        if comm == 'Circle':
-            # if self.hexBounds(E):
-            radius = strip.getInt()
-            corners = getCircCorners(E, radius)
-            coords = self.pathCoords(corners)
-            self.map.delete('hover')
-            if radius > 0:
-                self.map.create_polygon(coords, fill='', outline='black', width=2, tags='hover')
-            # else:
-            #     self.map.delete('hover')
-        if comm == 'Triangle':
-            A = strip.getCords()
-            if self.hexBounds(A):# and self.hexBounds(E):
-                corners = getTriCorners(A, E)
-                coords = self.pathCoords(corners)
-                self.map.delete('hover')
-                self.map.create_polygon(coords, fill='', outline='black', width=2, tags='hover')
-            else:
-                self.map.delete('hover')
+
                     
 version = '1.2'
 map2 = HexMap(9, 15)

@@ -27,9 +27,12 @@ def makeDrawMenu(strip, menu, rect):
         drawComands.add_command(label='Circle', command=lambda:strip.setCommand('Circle',
             'Draws a circle around a point, ' + colorInstr + ',\n'
             +'set the radius, and click a hex', entry=True, check=True))
-        drawComands.add_command(label='Triangle', command=lambda:strip.setCommand('Triangle','', display = '(0,0)'))
+        drawComands.add_command(label='Triangle', command=lambda:strip.setCommand('Triangle',
+            '', display = '(0,0)', check = True))
             # 'Changes all matching hexes colors, ' + colorInstr 
             # +'and click a hex'))
+        drawComands.add_command(label='Rhombus', command=lambda:strip.setCommand('Rhombus',
+            '', display = '(0,0)', check = True))
         drawComands.add_command(label='Fill', command=lambda:strip.setCommand('Fill',
             'Changes matching neighbooring hexes colors, ' + colorInstr 
             +'and click a hex'))

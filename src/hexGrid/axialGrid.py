@@ -3,7 +3,7 @@ Created on May 5, 2021
 
 @author: Liam
 '''
-from util.math import fullRange, roundUp, nonZeroRange
+from util.math import fullRange, roundUp, nonZeroRange, sumRange
 
 
 def cube_to_axial(cube):
@@ -107,11 +107,24 @@ def cube_round(cube, ax=False):
     return (rx, ry, rz)
 
 
-def triRound(axial):
-    (x, z) = axial
-    if x == 0 or z == 0 or z == -x:
-        return axial
-    y = -x - z
+def dirRound(a, b, unit=True):
+    if a == b:
+        return (0, 0)
+    d = hexSub(b, a)
+    l = quickDist(d)
+    u = cube_round(axial_to_cube(hexScale(d, 1 / l)), ax=True)
+    if unit:
+        return u
+    return hexScale(u, l)
+
+
+def triRound(a, b):
+    # d = hexSub(b, a)
+    # (x, z) = d
+    (x, y, z) = axial_to_cube(hexSub(b, a))
+    if x == 0 or z == 0 or y == 0:
+        return (x, z)
+    # y = -x - z
     dx = abs(x)
     dy = abs(y)
     dz = abs(z)
@@ -137,71 +150,6 @@ def getLine(a, b):
     return line
 
 
-def getCircCorners(center, radius):
-    corners = []
-    for Dir in axial_directions:
-        corners.append(hexAdd(center, hexScale(Dir, radius)))
-    return corners
-
-
-def getCirc(center, radius):
-    if radius <= 0:
-        return [center]
-    (cq, cr) = center
-    circ = []
-    for q in range(-radius, radius + 1):
-        for r in range(max(-radius, -q - radius), min(radius, -q + radius) + 1):
-#         var z = -x-y
-            circ.append((cq + q, cr + r))
-    return circ
-
-
-def getRing(center, radius):
-    if radius <= 0:
-        return [center]
-    ring = []
-    cur = hexAdd(center, hexScale(axial_directions[4], radius))
-    for i in range(6):
-        Dir = axial_directions[i]
-        for _j in range(radius):
-            ring.append(cur)
-            cur = hexAdd(cur, Dir)
-    return ring
-
-
-def getParrallagram(a, b):
-    parr = []
-    (q, r) = a
-    (dx, dy, dz) = axial_to_cube(hexSub(b, a))
-    if abs(dy) >= abs(dx) and abs(dy) >= abs(dz):
-        for x in fullRange(0, dx):
-            for z in fullRange(0, dz):
-                parr.append((q + x, r + z))
-    elif abs(dz) >= abs(dx):
-        for x in fullRange(0, dx):
-            for y in fullRange(0, dy):
-                parr.append((q + x, r - x - y))
-    else:
-        for y in fullRange(0, dy):
-            for z in fullRange(0, dz):
-                parr.append((q - y - z, r + z))
-    print(parr)
-    return parr
-
-
-def getParrCorners(a, b):
-    (dx, dy, dz) = axial_to_cube(hexSub(b, a))
-    if dx == 0 or dy == 0 or dz == 0:
-        return [a, b]
-    (q, r) = a
-    if abs(dy) >= abs(dx) and abs(dy) >= abs(dz):
-        return [a, (q + dx, r), b, (q, r + dz)]
-    elif abs(dx) >= abs(dz):
-        return [a, (q - dy, r), b, (q - dz, r + dz)]
-    else:
-        return [a, (q, r - dy), b, (q + dx, r - dx)]
-    
-    
 def quickLine(a, b, source=True):
     (dx, dz) = hexSub(b, a)
     (q, r) = a
@@ -226,18 +174,135 @@ def quickLine(a, b, source=True):
                 line.append((q + i, r - i))
     return line
 
+
+def getCirc(center, radius):
+    if radius <= 0:
+        return [center]
+    (x, y, z) = axial_to_cube(center)
+    return getFill(x - radius, x + radius, y - radius, y + radius,
+                       z - radius, z + radius, Sorted=True)
+    # (cq, cr) = center
+#     circ = []
+#     for q in range(-radius, radius + 1):
+#         for r in range(max(-radius, -q - radius), min(radius, -q + radius) + 1):
+# #         var z = -x-y
+#             circ.append((cq + q, cr + r))
+#     return circ
+
+
+def getRing(center, radius):
+    if radius <= 0:
+        return [center]
+    ring = []
+    cur = hexAdd(center, hexScale(axial_directions[4], radius))
+    for i in range(6):
+        Dir = axial_directions[i]
+        for _j in range(radius):
+            ring.append(cur)
+            cur = hexAdd(cur, Dir)
+    return ring
+
+
+def getParrallagram(a, b):
+    (ax, ay, az) = axial_to_cube(a)
+    (bx, by, bz) = axial_to_cube(b)
+    return getFill(ax, bx, ay, by, az, bz)
+    # (dx, dz) = hexSub(b, a)
+    # dy = -dx - dz
+    # xRange = fullRange(0, dx)
+    # zRange = fullRange(0, dz)
+    # yMin = min(0, dy)
+    # yMax = max(0, dy)
+    # return getFill(a, xRange, zRange, yMin, yMax)
+    # parr = []
+    # (q, r) = a
+    # (dx, dy, dz) = axial_to_cube(hexSub(b, a))
+    # if abs(dy) >= abs(dx) and abs(dy) >= abs(dz):
+    #     for x in fullRange(0, dx):
+    #         for z in fullRange(0, dz):
+    #             parr.append((q + x, r + z))
+    # elif abs(dz) >= abs(dx):
+    #     for x in fullRange(0, dx):
+    #         for y in fullRange(0, dy):
+    #             parr.append((q + x, r - x - y))
+    # else:
+    #     for y in fullRange(0, dy):
+    #         for z in fullRange(0, dz):
+    #             parr.append((q - y - z, r + z))
+    # print(parr)
+    # return parr
+
     
-def getBox(a, b):
-    if a == b:
-        return [a]
-    corners = getParrCorners(a, b)
-    if len(corners) == 2:
-        return quickLine(a, b)
-    box = []
-    for i in range(4):
-        line = quickLine(corners[i], corners[(i + 1) % 4], source=False)
-        box.extend(line)
-    return box
+def getTriangle(a, b):
+    (ax, ay, az) = axial_to_cube(a)
+    # (dx, dy, dz) = axial_to_cube(hexAdd(a, triRound(a, b)))
+    (dx, dy, dz) = axial_to_cube(triRound(a, b))
+    if dx == 0:
+        # xRange = fullRange(0, dy)
+        bx = ax + dy
+    else:
+        # xRange = fullRange(0, dx)
+        bx = ax + dx
+    if dz == 0:
+        # zRange = fullRange(0, dx)
+        bz = az + dx
+    else:
+        # zRange = fullRange(0, dz)
+        bz = az + dz
+    if dy == 0:
+    #     dy = dz
+        by = ay + dz
+    else:
+        by = ay + dy
+    return getFill(ax, bx, ay, by, az, bz)
+    # yMin = min(0, dy)
+    # yMax = max(0, dy)
+    # return getFill(a, xRange, zRange, yMin, yMax)
+
+    
+# def getFill(a, xRange, zRange, yMin, yMax):
+#     (q, r) = a
+#     fill = []
+#     for x in xRange:
+#         for z in zRange:
+#             y = -x - z
+#             if y >= yMin and y <= yMax:
+#                 fill.append((q + x, r + z))
+#     return fill
+
+
+def getFill(x1, x2, y1, y2, z1, z2, Sorted=False):
+    if Sorted:
+        # zMin = z1
+        # zMax = z2
+        # sMin = -y2
+        # sMax = -y1
+        xRange = range(x1, x2 + 1)
+        zRange = z1, z2, -y2, -y1
+    else:
+        # zMin = min(z1, z2)
+        # zMax = max(z1, z2)
+        # sMin = -max(y1, y2)
+        # sMax = -min(y1, y2)
+        xRange = fullRange(x1, x2)
+        zRange = min(z1, z2), max(z1, z2), -max(y1, y2), -min(y1, y2)
+        # zRange = zMin,zMax,sMin,sMax
+    fill = []
+    for x in xRange:
+        for z in sumRange(x, *zRange, Sorted=True):
+            fill.append((x, z))
+    return fill
+# def getBox(a, b):
+#     if a == b:
+#         return [a]
+#     corners = getParrCorners(a, b)
+#     if len(corners) == 2:
+#         return quickLine(a, b)
+#     box = []
+#     for i in range(4):
+#         line = quickLine(corners[i], corners[(i + 1) % 4], source=False)
+#         box.extend(line)
+#     return box
 
 
 def getPoly(corners):
@@ -257,11 +322,40 @@ def getPolygram(a, b, corMethod):
     return getPoly(corMethod(a, b))
 
 
-def getTriCorners(a, b):
+def parrCorners(a, b):
+    (dx, dy, dz) = axial_to_cube(hexSub(b, a))
+    if dx == 0 or dy == 0 or dz == 0:
+        return [a, b]
+    (q, r) = a
+    if abs(dy) >= abs(dx) and abs(dy) >= abs(dz):
+        return [a, (q + dx, r), b, (q, r + dz)]
+    elif abs(dx) >= abs(dz):
+        return [a, (q - dy, r), b, (q - dz, r + dz)]
+    else:
+        return [a, (q, r - dy), b, (q + dx, r - dx)]
+
+    
+def triCorners(a, b):
+    d = triRound(a, b)
     corners = [a]
-    d = triRound(hexSub(b, a))
     corners.append(hexAdd(a, d))
     corners.append(hexAdd(a, clockwise(d)))
+    return corners
+
+
+def rhomCorners(a, b):
+    d = dirRound(a, b, unit=False)
+    corners = [a]
+    corners.append(hexAdd(a, counterClockwise(d)))
+    corners.append(hexAdd(a, d))
+    corners.append(hexAdd(a, clockwise(d)))
+    return corners
+    
+
+def circCorners(center, radius):
+    corners = []
+    for Dir in axial_directions:
+        corners.append(hexAdd(center, hexScale(Dir, radius)))
     return corners
 
 
@@ -291,6 +385,15 @@ class HexGrid:
         Sum = q + r
         return ((quick or (q >= 0 and r >= 0 and q < self.W and r < self.H)) 
                 and Sum >= self.min and Sum < self.max)
+        
+    def setBounds(self, Set, indexes=None, quick=False):
+        if indexes == None:
+            indexes = range(len(Set))
+        for i in indexes:
+            (q, r) = Set[i]
+            if not self.inBounds(q, r, quick=quick):
+                return False
+        return True
     
     def baseTile(self, q, r):
         return 0  # (q, r)
@@ -298,6 +401,8 @@ class HexGrid:
     def setTile(self, q, r, tile):
         if self.inBounds(q, r):
             self.forceTile(q, r, tile)
+            return True
+        return False
             
     def forceTile(self, q, r, tile):
         self.grid[q][r] = tile
@@ -332,12 +437,41 @@ class HexGrid:
             if fill:
                 self.draw(getParrallagram(a, b), tile)
             else:
-                self.draw(getBox(a, b), tile)
+                self.draw(getPolygram(a, b, parrCorners), tile)
             return True
         return False
     # def drawBox(self, a, b, tile):
     #     if self.hexBounds(a) and self.hexBounds(b):
     #         self.draw(getBox(a, b), tile)
+    
+    def drawTriangle(self, a, b, tile, fill):
+        if self.hexBounds(a) and self.hexBounds(b):
+            if a == b:
+                (q, r) = a
+                return self.setTile(q, r, tile)
+            corners = triCorners(a, b)
+            force = self.setBounds(corners, indexes=[1, 2])
+            if fill:
+                self.draw(getTriangle(a, b), tile, force=force)
+            else:
+                self.draw(getPoly(corners), tile, force=force)
+            return True
+        return False
+    
+    def drawRhombus(self, a, b, tile, fill):
+        if self.hexBounds(a) and self.hexBounds(b):
+            if a == b:
+                (q, r) = a
+                return self.setTile(q, r, tile)
+            corners = rhomCorners(a, b)
+            force = self.setBounds(corners, indexes=[1, 3])
+            if fill:
+                c, d = corners[1::2]
+                self.draw(getParrallagram(c, d), tile, force=force)
+            else:
+                self.draw(getPoly(corners), tile, force=force)
+            return True
+        return False
     
     def drawCircle(self, center, radius, tile, fill):
         if fill:
