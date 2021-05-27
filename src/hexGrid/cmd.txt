@@ -1,0 +1,1 @@
+pyinstaller -F -w --specpath spec -n HexGrid_V hexMap.py
