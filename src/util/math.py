@@ -49,5 +49,20 @@ def toInt(Str, default=0):
     except ValueError:
         return default
 
+
+def even(x):
+    if x % 2 == 0:
+        return x
+    elif x < 0:
+        return x - 1
+    else:
+        return x + 1
+def odd(x):
+    if x % 2 == 1:
+        return x
+    elif x < 0:
+        return x - 1
+    else:
+        return x + 1
 # print(gcd(34873,178))
     

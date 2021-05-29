@@ -3,7 +3,7 @@ Created on May 5, 2021
 
 @author: Liam
 '''
-from util.math import fullRange, roundUp, nonZeroRange, sumRange
+from util.math import fullRange, roundUp, nonZeroRange, sumRange, even
 
 
 def cube_to_axial(cube):
@@ -258,7 +258,6 @@ def getTriangle(a, b):
     # yMin = min(0, dy)
     # yMax = max(0, dy)
     # return getFill(a, xRange, zRange, yMin, yMax)
-
     
 # def getFill(a, xRange, zRange, yMin, yMax):
 #     (q, r) = a
@@ -362,41 +361,263 @@ def circCorners(center, radius):
 class HexGrid:
     
     def __init__(self, width, height):
+        self.setBounds(width, height)
+        self.grid = []
+        self.entities = {}
+        for q in range(self.W):
+            self.grid.append(self.makeRow(q))
+            # app = self.grid[q].append
+            # for r in range(self.H):
+            #     if self.inBounds(q, r, quick=True):
+            #         app(self.baseTile(q, r))
+            #     else:
+            #         app(None)
+
+    def setBounds(self, width, height):
         self.W = width
         self.H = height
         self.min = min(width, height) // 2
         self.max = width + height - self.min - 1
-        self.grid = []
-        self.entities = {}
-        for q in range(self.W):
-            self.grid.append([])
-            app = self.grid[q].append
-            for r in range(self.H):
-                if self.inBounds(q, r, quick=True):
-                    app(self.baseTile(q, r))
+        
+    def makeRow(self, q):
+        row = []
+        app = row.append
+        for r in range(self.H):
+            app(self.baseTile(q, r))
+        return row
+
+    def makeTile(self, q, r):
+        if self.getTile(q, r) == None:
+            self.grid[q][r] = self.baseTile(q, r)
+            
+    def helpBounds(self, width, height, left, up, expand):
+        w = abs(width)
+        h = abs(even(height))
+        if expand:
+            if up != None:
+                h = min(h, w * 2)
+            if self.W + w < self.H + h:
+                h = self.W + w - self.H
+                if h % 2 == 1:
+                    h -= 1
+        else:
+            if self.W - w < 5:
+                w = 0
+            if self.H - h < 3:
+                h = 0
+            if up != None:
+                h = min(h, w * 2)
+            if self.W - w < self.H - h:
+                if h < w*2:
+                    w = h*2
+                #     w = self.H
                 else:
-                    app(None)
+                    h = self.H - self.W + w  
+                    if h % 2 == 1:
+                        h -= 1
+        if left == None:
+            lw = w // 2
+        elif left:
+            lw = w
+        else:
+            lw = 0
+        # if up == False:
+        #     lw += h // 2
+        if up == None:
+            uh = h // 2
+        elif up:
+            uh = h
+        else:
+            uh = 0
+            lw += h // 2
+        return (w, h, lw, uh)
     
-    def hexBounds(self, a, quick=False):
-        (q, r) = a
-        return self.inBounds(q, r, quick=quick)
+    def expand(self, width, height, left, up):
+        # w = abs(width)
+        # h = abs(even(height))
+        # if up != None:
+        #     h = min(h, w * 2)
+        # if self.W + w < self.H + h:
+        #     h = self.W + w - self.H
+        #     if h % 2 == 1:
+        #         h -= 1
+        # if (w == 0 and h == 0) or (left != None and up != None):
+        #     return
+        # oldW, oldH = self.W, self.H
+        # left = w < 0
+        (w, h, lw, uh) = self.helpBounds(width, height, left, up, True)
+        grid = self.grid
+        if w != 0:
+            oldW = self.W
+            check = self.getOutBounds(left)
+            # print(check)
+            self.setBounds(oldW + w, self.H)
+            # if left == None:
+            #     lw = w // 2
+            # elif left:
+            #     lw = w
+            # else:
+            #     lw = 0
+            # if up == False:
+            #     lw += h // 2
+            for q in range(0, lw):
+                grid.insert(q, self.makeRow(q))
+            for q in range(oldW + lw, self.W):
+                grid.append(self.makeRow(q))
+            for (q, r) in check:
+                q += lw
+                if self.inBounds(q, r, quick=True):
+                    self.makeTile(q, r)
+        if h != 0:
+            # check = self.getOutBounds(up)
+            oldH = self.H
+            if up is not None:
+                check1 = self.getOutBounds(up)
+            self.setBounds(self.W, oldH + h)
+            # if up == None:
+            #     uh = h // 2
+            # elif up:
+            #     uh = h
+            # else:
+            #     uh = 0
+            for q in range(0, self.W):
+                row = grid[q]
+                ins = row.insert
+                app = row.append
+                for r in range (0, uh):
+                    ins(r, self.baseTile(q, r))
+                for r in range (oldH + uh, self.H):
+                    app(self.baseTile(q, r))
+            if up is not None:
+                # print(grid)
+                for (q, r) in check1:
+                    r += uh
+                    if self.inBounds(q, r, quick=True):
+                        self.makeTile(q, r)
+                # print(grid)
+                for (q, r)in self.getOutBounds(not up):
+                    # print(q, r)
+                    # r += uh
+                    self.deleteTile(q, r)
+        self.shiftEntitys((lw, uh))
+        
+    def shrink(self, width, height, left, up):
+        # w = abs(width)
+        # h = abs(even(height))
+        # if up != None:
+        #     h = min(h, w * 2)
+        # grid = self.grid
+        (w, h, lw, uh) = self.helpBounds(width, height, left, up, False)
+        if w != 0:
+            oldW = self.W
+            # check = self.getOutBounds(left)
+            # print(check)
+            self.setBounds(oldW - w, self.H)
+            # if left == None:
+            #     lw = w // 2
+            # elif left:
+            #     lw = w
+            # else:
+            #     lw = 0
+            # if up == False:
+            #     lw += h // 2
+            # print(lw)
+            self.deleteRow(self.W + lw, oldW)
+            self.deleteRow(0, lw)
+            # print(self.grid)
+            # for q in range(0, lw):
+            #     grid.insert(q, self.makeRow(q))
+            # for q in range(oldW + lw, self.W):
+            #     grid.append(self.makeRow(q))
+            for (q, r) in self.getOutBounds(left):
+                self.deleteTile(q, r)
+                # q += lw
+                # if self.inBounds(q, r, quick=True):
+                #     self.makeTile(q, r)
+        if h != 0:
+            # check = self.getOutBounds(up)
+            oldH = self.H
+            # if up is not None:
+            #     check1 = self.getOutBounds(up)
+            self.setBounds(self.W, oldH - h)
+            # if up == None:
+            #     uh = h // 2
+            # elif up:
+            #     uh = h
+            # else:
+            #     uh = 0
+            for q in range(0, self.W):
+                self.deleteCol(q, self.H + uh, oldH)
+                self.deleteCol(q, 0, uh)
+            
+                # row = grid[q]
+                # ins = row.insert
+                # app = row.append
+                # for r in range (0, uh):
+                #     ins(r, self.baseTile(q, r))
+                # for r in range (oldH + uh, self.H):
+                #     app(self.baseTile(q, r))
+            
+            # if up is not None:
+            for (q, r) in self.getOutBounds(up):
+                self.deleteTile(q, r)
+
+            #     print(grid)
+            #     for (q, r) in check1:
+            #         r += uh
+            #         if self.inBounds(q, r, quick=True):
+            #             self.makeTile(q, r)
+            #     print(grid)
+            #     for (q, r)in self.getOutBounds(not up):
+            #         print(q, r)
+            #         # r += uh
+            #         self.deleteTile(q, r)
+        self.shiftEntitys((-lw, -uh))
+    def deleteTile(self, q, r):
+        self.grid[q][r] = None
+    
+    def deleteRow(self, q1, q2):
+        del self.grid[q1:q2]
+    
+    def deleteCol(self, q, r1, r2):
+        del self.grid[q][r1:r2]
+    # def hexBounds(self, a, quick=False):
+    #     (q, r) = a
+    #     return self.inBounds(q, r, quick=quick)
     
     def inBounds(self, q, r, quick=False):
         Sum = q + r
         return ((quick or (q >= 0 and r >= 0 and q < self.W and r < self.H)) 
                 and Sum >= self.min and Sum < self.max)
         
-    def setBounds(self, Set, indexes=None, quick=False):
+    def cornBounds(self, Set, indexes=None, quick=False):
         if indexes == None:
             indexes = range(len(Set))
         for i in indexes:
-            (q, r) = Set[i]
-            if not self.inBounds(q, r, quick=quick):
+            # (q, r) = Set[i]
+            if not self.inBounds(*Set[i], quick=quick):
                 return False
         return True
     
+    def getOutBounds(self, topLeft):
+        if topLeft == None:
+            return self.getOutBounds(True) + self.getOutBounds(False)
+        if topLeft:
+            Min = self.min - 1
+            return getFill(0, Min, -Min, 0, 0, Min, Sorted=True)
+        w = self.W - 1
+        h = self.H - 1
+        drop = self.min - 1
+        Max = -self.max  # -1
+        Min = Max - drop
+        # bound = w - drop, w, Min, Max, h - drop, h
+        # print(bound)
+        return getFill(w - drop, w, Min, Max, h - drop, h, Sorted=True)
+    
     def baseTile(self, q, r):
-        return 0  # (q, r)
+        if self.inBounds(q, r, quick=True):
+            return 0  # (q, r)
+        return None
     
     def setTile(self, q, r, tile):
         if self.inBounds(q, r):
@@ -427,13 +648,13 @@ class HexGrid:
             draw(q, r, tile)
             
     def drawLine(self, a, b, tile):
-        if self.hexBounds(a) and self.hexBounds(b):
+        if self.inBounds(*a) and self.inBounds(*b):
             self.draw(getLine(a, b), tile)
             return True
         return False
             
     def drawParrallagram(self, a, b, tile, fill):
-        if self.hexBounds(a) and self.hexBounds(b):
+        if self.inBounds(*a) and self.inBounds(*b):
             if fill:
                 self.draw(getParrallagram(a, b), tile)
             else:
@@ -445,12 +666,12 @@ class HexGrid:
     #         self.draw(getBox(a, b), tile)
     
     def drawTriangle(self, a, b, tile, fill):
-        if self.hexBounds(a) and self.hexBounds(b):
+        if self.inBounds(*a) and self.inBounds(*b):
             if a == b:
                 (q, r) = a
                 return self.setTile(q, r, tile)
             corners = triCorners(a, b)
-            force = self.setBounds(corners, indexes=[1, 2])
+            force = self.cornBounds(corners, indexes=[1, 2])
             if fill:
                 self.draw(getTriangle(a, b), tile, force=force)
             else:
@@ -459,12 +680,11 @@ class HexGrid:
         return False
     
     def drawRhombus(self, a, b, tile, fill):
-        if self.hexBounds(a) and self.hexBounds(b):
+        if self.inBounds(*a) and self.inBounds(*b):
             if a == b:
-                (q, r) = a
-                return self.setTile(q, r, tile)
+                return self.setTile(*a, tile)
             corners = rhomCorners(a, b)
-            force = self.setBounds(corners, indexes=[1, 3])
+            force = self.cornBounds(corners, indexes=[1, 3])
             if fill:
                 c, d = corners[1::2]
                 self.draw(getParrallagram(c, d), tile, force=force)
@@ -474,10 +694,13 @@ class HexGrid:
         return False
     
     def drawCircle(self, center, radius, tile, fill):
+        # if radius == 0:
+        #     self.setTile(*center, tile)
+        force = self.cornBounds(circCorners(center, radius))
         if fill:
-            self.draw(getCirc(center, radius), tile, force=False)
+            self.draw(getCirc(center, radius), tile, force=force)
         else:
-            self.draw(getRing(center, radius), tile, force=False)
+            self.draw(getRing(center, radius), tile, force=force)
     
     # def drawRing(self, center, radius, tile):
     #     self.draw(getRing(center, radius), tile, force=False)
@@ -510,21 +733,45 @@ class HexGrid:
         self.entities[coords] = entity
         
     def move(self, a, b):
-        if self.hexBounds(b):
+        if self.inBounds(*b):
             self.entities[b] = self.entities[a]
             self.entities.pop(a)
             
     def swap(self, a, b):
-        if self.hexBounds(b):
+        if self.inBounds(*b):
             temp = self.entities[b]
             self.entities[b] = self.entities[a]
             self.entities[a] = temp
     
     def remove(self, e):
         self.entities.pop(e)
+    
+    def shiftEntitys(self, offset):
+        if offset == (0, 0):
+            return
+        newEnt = {}
+        oldEnt = self.entities
+        rem = []
+        # offset = (q, r)
+        bounds = self.inBounds
+        for coords in oldEnt:
+            ent = oldEnt[coords]
+            print(coords, ent)
+            newCoords = hexAdd(coords, offset)
+            if bounds(*newCoords):
+                newEnt[newCoords] = ent
+            else: 
+                rem.append(coords)
+        for e in rem:
+            self.remove(e)
+        self.entities = newEnt
+    # def printCSV(self):
+    #     for 
 
-# print(getCirc((0, 0), 1))
-# print(getRing((0, 0), 2))
+# template = HexGrid(3, 3)
 # hexGrid = HexGrid(5, 5)
-# # hexGrid.drawLine((2,0), (4,2), tile)
+# hexGrid.drawCircle((2, 2), 1, 1, True)
 # print(hexGrid.grid)
+# hexGrid.shrink(2, 2, None, None)
+# print(hexGrid.grid)
+# print(template.grid)

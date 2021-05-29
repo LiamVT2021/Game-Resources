@@ -10,31 +10,54 @@ from hexGrid.axialGrid import HexGrid, cube_round, axial_to_cube, parrCorners, \
                             circCorners, triCorners, rhomCorners
 from hexGrid.CommandStrip import HexStrip
 from hexGrid.Actor import Entity, ActorManager
+from util.math import odd
 
 
 def lineCorners(a, b):
     return [a, b]
 
 
-def makeHex(canvas, x, y, a, color='white'):
+def hexCoords(x, y, a):
     sq3 = int(sqrt(3) / 2 * a)
-    cords = x, y + a, x + sq3, y + a / 2, x + sq3, y - a / 2, x, y - a, x - sq3, y - a / 2, x - sq3, y + a / 2
-    inner = canvas.create_polygon(cords, fill=color, tag='inner')
-    outer = canvas.create_polygon(cords, outline='black', fill='',
+    return (x, y + a, x + sq3, y + a / 2, x + sq3, y - a / 2,
+            x, y - a, x - sq3, y - a / 2, x - sq3, y + a / 2)
+
+
+def makeHex(canvas, x, y, a, color='white'):
+    # sq3 = int(sqrt(3) / 2 * a)
+    # cords = x, y + a, x + sq3, y + a / 2, x + sq3, y - a / 2, x, y - a, x - sq3, y - a / 2, x - sq3, y + a / 2
+    coords = hexCoords(x, y, a)
+    inner = canvas.create_polygon(coords, fill=color, tag='inner')
+    outer = canvas.create_polygon(coords, outline='black', fill='',
                 width=1, activewidth=3, tag='outer')
     return (inner, outer)
     # hexagon.bind('<Button>',click(hexagon))
 
+
+def moveHex(canvas, Hex, x, y, a):
+    for shape in Hex:
+        canvas.coords(shape, hexCoords(x, y, a))
+
+
+def deleteHex(canvas, Hex):
+    if Hex != None:
+        for shape in Hex:
+            canvas.delete(shape)
+
     
+def circCoords(x, y, r):
+    return x - r, y - r, x + r, y + r
+
+
 def makeCircle(canvas, x, y, r, color, label, font):
-    circle = canvas.create_oval(x - r, y - r, x + r, y + r, fill=color)
-    text = canvas.create_text(x, y, text=label, font=font)
+    circle = canvas.create_oval(circCoords(x, y, r), fill=color, tag='circ')
+    text = canvas.create_text(x, y, text=label, font=font, tag='text')
     return(circle, text)
 
 
 def moveCircle(canvas, shape, x, y, r):
     (circ, text) = shape
-    canvas.coords(circ, x - r, y - r, x + r, y + r)
+    canvas.coords(circ, circCoords(x, y, r))
     canvas.coords(text, x, y)
     # print('moved to')
     # print(x, y)
@@ -47,7 +70,7 @@ class HexMap(HexGrid):
         self.window = root
         self.window.title("Hex Map V" + version)
         self.font = Font(size=hexSize // 2)
-        self.strip = HexStrip(root, self.font, hexSize // 3)
+        self.strip = HexStrip(root, self.font, hexSize // 3, self.buttonClick)
         # print(self.strip.getCommand())
 #         if width < 5:
 #             width = 5 
@@ -64,17 +87,17 @@ class HexMap(HexGrid):
         self.WS = int(sqrt(3) * (self.S))
         self.HS = 1.5 * (self.S)
         
-        if A < 3:
-            A = 3
-        elif A % 2 == 0:
-            A += 1
-        if B < 3:
-            B = 3
-        elif B % 2 == 0:
-            B += 1  
-        W = max(A, B)
-        H = min(A, B)
-        Map = Canvas(root, bg="white", height=(H + 1) * self.HS, width=(W + 1) * self.WS)
+        # if A < 3:
+        #     A = 3
+        # elif A % 2 == 0:
+        #     A += 1
+        # if B < 3:
+        #     B = 3
+        # elif B % 2 == 0:
+        #     B += 1  
+        H = odd(min(A, B))
+        W = max(A, B, H)
+        Map = Canvas(root, bg="white")
         self.map = Map
         super().__init__(W, H)
 #         self.grid = []
@@ -103,6 +126,30 @@ class HexMap(HexGrid):
 #         self.map.itemconfig(hex1, fill='blue')
         self.actors = ActorManager()  # ActorWindow(Toplevel(), self.font, hexSize // 2)
         
+    def setBounds(self, width, height):
+        self.map.config(height=(height + 1) * self.HS, width=(width + 1) * self.WS)
+        HexGrid.setBounds(self, width, height)
+
+    def expand(self, width, height, left, up):
+        HexGrid.expand(self, width, height, left, up)
+        self.remap()
+        
+    def shrink(self, width, height, left, up):
+        HexGrid.shrink(self, width, height, left, up)
+        self.remap()
+
+    def remap(self):
+        for q in range(self.W):
+            for r in range(self.H):
+                if self.inBounds(q, r, quick=True):
+                    self.reHex(q, r)
+        ents = self.entities
+        for coords in ents:
+            (shape, _entity) = ents[coords]
+            self.moveCircle(shape, coords)
+        self.map.tag_raise('circ')
+        self.map.tag_raise('text')
+        
     def addEntity(self, coords, color, label):
         entity = Entity(color, label)
         self.add(coords, self.makeEntity(coords, entity))
@@ -129,11 +176,13 @@ class HexMap(HexGrid):
             super().swap(a, b)
             
     def moveCircle(self, shape, coords):
-        (X, Y) = self.hexCenter(coords)
-        moveCircle(self.map, shape, X, Y, self.S * .6)
+        # (X, Y) = self.hexCenter(coords)
+        moveCircle(self.map, shape, *self.getCenter(*coords), self.S * .6)
     
     def remove(self, e):
+        print (e)
         get = self.entities.get(e)
+        print(get)
         if get != None:
             (shape, entity) = get
             if entity.isActor():
@@ -143,6 +192,8 @@ class HexMap(HexGrid):
             super().remove(e)
         
     def baseTile(self, x, y):
+        if not self.inBounds(x, y, quick=True):
+            return None
         return self.makeHex(x, y)
     
     def makeHex(self, x, y, color=None):
@@ -151,18 +202,43 @@ class HexMap(HexGrid):
             return makeHex(self.map, X, Y, self.S)
         return makeHex(self.map, X, Y, self.S, color)
     
-    def hexCenter(self, Hex):
-        (x, y) = Hex
-        return self.getCenter(x, y)
+    def reHex(self, q, r):
+        moveHex(self.map, self.getTile(q, r), *self.getCenter(q, r), self.S)
+        
+    def deleteTile(self, q, r):
+        deleteHex(self.map, self.getTile(q, r))
+        # shape = self.getTile(q, r)
+        # if shape != None:
+        #     (inner, outer) = shape
+        #     self.map.delete(inner)
+        #     self.map.delete(outer)
+        HexGrid.deleteTile(self, q, r)
+    
+    def deleteRow(self, q1, q2):
+        rows = self.grid[q1:q2]
+        canvas = self.map
+        for row in rows:
+            for Hex in row:
+                deleteHex(canvas, Hex)
+        HexGrid.deleteRow(self, q1, q2)
+    
+    def deleteCol(self, q, r1, r2):
+        canvas = self.map
+        for Hex in self.grid[q][r1:r2]:
+            deleteHex(canvas, Hex)
+        HexGrid.deleteCol(self, q, r1, r2)
+    # def hexCenter(self, Hex):
+    #     (x, y) = Hex
+    #     return self.getCenter(x, y)
     
     def getCenter(self, x, y):
         return ((x + 1 + (y - self.min) / 2) * self.WS,
                 (y + 1) * self.HS)
         
     def makeEntity(self, coords, entity):
-        (X, Y) = self.hexCenter(coords)
+        # (X, Y) = self.hexCenter(coords)
         (color, label) = entity.toTuple()
-        return (makeCircle(self.map, X, Y, self.S * .6, color, label, self.font), entity)
+        return (makeCircle(self.map, *self.getCenter(*coords), self.S * .6, color, label, self.font), entity)
         
     def getClicked(self, ex, ey):
         py = ey / self.HS - 1
@@ -202,7 +278,7 @@ class HexMap(HexGrid):
     def click(self, event):
         # print("clicked: (%s %s)" % (event.x, event.y))
         E = self.getClicked(event.x, event.y)
-        if not self.hexBounds(E):
+        if not self.inBounds(*E):
             return
         strip = self.strip
         comm = strip.getCommand()
@@ -263,7 +339,7 @@ class HexMap(HexGrid):
                 self.addGeneric(E, clr, strip.getEntry())
         elif comm == 'Move':
             A = strip.getCords()
-            if not self.hexBounds(A):
+            if not self.inBounds(*A):
                 if self.entities.get(E) == None:
                     return  # strip.setDisplay(str(E))
             else:  # elif self.hexBounds(E):
@@ -280,13 +356,13 @@ class HexMap(HexGrid):
 
     def pathCoords(self, hexList):
         coords = []
-        for Hex in hexList:
-            coords.extend(self.hexCenter(Hex))
+        for (x, y) in hexList:
+            coords.extend(self.getCenter(x, y))
         return coords
         
     def hover(self, event):
         E = self.getClicked(event.x, event.y)
-        if not self.hexBounds(E):
+        if not self.inBounds(*E):
             self.map.delete('hover')
             return
         strip = self.strip
@@ -346,7 +422,7 @@ class HexMap(HexGrid):
             #     self.map.delete('hover')
                 
     def makeHover(self, a, b, cornMethod):
-            if self.hexBounds(a):  # and self.hexBounds(E):
+            if self.inBounds(*a):  # and self.hexBounds(E):
                 corners = cornMethod(a, b)
                 coords = self.pathCoords(corners)                    
                 self.map.delete('hover')
@@ -357,8 +433,16 @@ class HexMap(HexGrid):
                                              width=2, tags='hover')
             else:
                 self.map.delete('hover')
+                
+    def buttonClick(self):
+        strip = self.strip
+        comm = strip.getCommand()
+        if comm == 'Expand':
+            self.expand(strip.getInt(), strip.getInt(2), *strip.eDir())
+        elif comm == 'Shrink':
+            self.shrink(strip.getInt(), strip.getInt(2), *strip.eDir())
 
                     
-version = '1.2'
-map2 = HexMap(9, 15)
+version = '2.0'
+map2 = HexMap(6, 6)
 map2.start()
